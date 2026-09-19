@@ -1,0 +1,7 @@
+Runtime requirements
+- Node.js 22 or newer
+- npm
+- Chromium installed through Playwright
+
+Node packages are pinned in package.json and package-lock.json.
+Run ./requirements.sh to install the project packages and Chromium.

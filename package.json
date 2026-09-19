@@ -1,0 +1,24 @@
+{
+  "name": "ai-assurance-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright checks for AI response quality, release controls, cost limits, audit evidence, and graceful failure handling.",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/express": "5.0.3",
+    "@types/node": "24.3.0",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "express": "5.2.1"
+  }
+}
