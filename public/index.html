@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Participant Answer Check</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 760px; margin: 48px auto; padding: 0 20px; line-height: 1.5; }
+    textarea { width: 100%; min-height: 100px; padding: 10px; }
+    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
+    #result { margin-top: 24px; padding: 16px; border: 1px solid #bbb; border-radius: 8px; }
+    #error { color: #8b0000; }
+  </style>
+</head>
+<body>
+  <h1>Participant Answer Check</h1>
+  <p>Ask a general retirement-plan question.</p>
+  <label for="question">Question</label>
+  <textarea id="question">How does a target-date fund work?</textarea>
+  <button id="ask">Ask</button>
+  <div id="result" hidden>
+    <strong>Answer</strong>
+    <p id="answer"></p>
+    <p id="source"></p>
+    <p id="error"></p>
+  </div>
+
+  <script>
+    const button = document.querySelector('#ask');
+    const result = document.querySelector('#result');
+    const answer = document.querySelector('#answer');
+    const source = document.querySelector('#source');
+    const error = document.querySelector('#error');
+
+    button.addEventListener('click', async () => {
+      result.hidden = false;
+      answer.textContent = '';
+      source.textContent = '';
+      error.textContent = '';
+
+      try {
+        const response = await fetch('/api/answer', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-tenant-id': 'web-demo'
+          },
+          body: JSON.stringify({ question: document.querySelector('#question').value })
+        });
+
+        if (!response.ok) throw new Error('The answer service is unavailable.');
+
+        const data = await response.json();
+        answer.textContent = data.answer;
+        source.textContent = data.sourceIds.length ? `Source: ${data.sourceIds.join(', ')}` : 'Source: not required for this response';
+      } catch {
+        error.textContent = 'The answer service is unavailable. Please try again later.';
+      }
+    });
+  </script>
+</body>
+</html>
