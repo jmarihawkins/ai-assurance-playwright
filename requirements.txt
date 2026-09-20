@@ -2,6 +2,13 @@ Runtime requirements
 - Node.js 22 or newer
 - npm
 - Chromium installed through Playwright
+- OpenAI API key for live mode
 
 Node packages are pinned in package.json and package-lock.json.
-Run ./requirements.sh to install the project packages and Chromium.
+
+Setup:
+- Git Bash or WSL: run ./requirements.sh
+- PowerShell: run npm ci, then npx playwright install chromium
+
+Live mode reads OPENAI_API_KEY and AI_MODE from a local .env file.
+The .env file is ignored by Git and should not be committed.

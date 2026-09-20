@@ -1,22 +1,25 @@
 # AI Assurance Checks with Playwright
 
-This project uses Playwright to test the control layer around a small AI-backed participant experience. It checks what a user sees, what the service returns, whether release rules stay in place, and whether each request leaves usable evidence behind.
+This project uses Playwright and TypeScript to test the control layer around a small AI-backed participant experience.
 
-The demo app is intentionally small. The focus is the assurance work around it.
+The service can send retirement education questions to the OpenAI API, ground supported questions with local plan content, record request evidence, and expose the controls that Playwright verifies.
+
+The application is intentionally small. The focus is on how browser and API tests can be used to check AI behavior, release controls, evidence, and failure handling.
 
 ## What is checked
 
-| Control | What the test proves |
+| Control | What the test verifies |
 | --- | --- |
-| Grounded response | Informational answers show the source used for the response |
-| Refusal behavior | Personal investment-choice requests are refused |
-| Version control | Model and prompt versions are pinned and visible in response headers |
-| Token budget | Input and output token counts stay inside defined limits |
-| Retrieval and training rules | Informational answers use retrieval and tenant data is not marked for training |
+| Grounded response | A supported informational answer returns the expected source |
+| Refusal behavior | Requests for personal investment choices or guaranteed returns are refused |
+| Model and prompt control | The expected model and prompt versions are visible and checked |
+| Token budget | Input and output token use stays within defined limits |
+| Retrieval rule | Supported informational questions use the expected knowledge source |
+| Training rule | The service reports that tenant data is not allowed for training |
 | Tenant evidence | Audit records stay tied to the tenant that created the request |
-| Audit evidence | Each answer gets a request ID and a matching audit record attached to the test report |
-| Release gate | A small assurance set must meet the required pass rate |
-| Graceful failure | The page gives a clear fallback when the answer service is unavailable |
+| Audit evidence | Each successful request receives an ID and matching audit record |
+| Release gate | A small behavior set must meet the required pass rate |
+| Graceful failure | The page shows a clear fallback when the answer service fails |
 
 ## Project layout
 
@@ -25,6 +28,8 @@ The demo app is intentionally small. The focus is the assurance work around it.
 ├── public/
 │   └── index.html
 ├── src/
+│   ├── knowledge.ts
+│   ├── openai.ts
 │   ├── policy.ts
 │   └── server.ts
 ├── tests/
@@ -32,23 +37,156 @@ The demo app is intentionally small. The focus is the assurance work around it.
 │   ├── controls.spec.ts
 │   ├── quality.spec.ts
 │   └── resilience.spec.ts
-├── .github/workflows/playwright.yml
+├── .github/
+│   └── workflows/
+│       └── playwright.yml
+├── .gitignore
+├── package.json
+├── package-lock.json
 ├── playwright.config.ts
 ├── requirements.sh
 ├── requirements.txt
-└── package.json
+└── tsconfig.json
 ```
 
-## Run it
+## AI modes
 
-Requirements: Node.js 22 or newer and npm.
+The service supports two modes.
+
+### Live mode
+
+Live mode sends the request through the OpenAI Responses API.
+
+The model, prompt version, and token limits are defined in `src/policy.ts`. The API call is kept in `src/openai.ts` so model access stays separate from the application and test logic.
+
+Local settings are read from a `.env` file:
+
+```text
+OPENAI_API_KEY=your_api_key
+AI_MODE=live
+```
+
+The `.env` file is ignored by Git and should never be committed.
+
+### Mock mode
+
+Mock mode returns deterministic responses without making an external API call.
+
+GitHub Actions uses this mode so pull requests and pushes can run the same assurance suite without requiring an API key or depending on a live model response.
+
+## Grounding
+
+`src/knowledge.ts` contains a small source used for the target-date fund example.
+
+For supported informational questions, the server:
+
+1. looks up relevant source content
+2. adds that content to the model prompt
+3. returns the source ID with the answer
+4. records the source ID in the audit event
+
+This is intentionally a small retrieval example rather than a full vector-search or RAG platform. It gives the tests a real source boundary to verify without adding infrastructure that is outside the purpose of the project.
+
+Personal investment requests do not use the informational source. They are handled as refusal scenarios.
+
+## How the service works
+
+`src/server.ts` handles the application request and coordinates the controls around it.
+
+A successful request produces:
+
+- the participant-facing answer
+- source IDs
+- input and output token counts
+- retrieval and training-control metadata
+- model and prompt version information
+- a unique request ID
+- an audit event tied to the tenant that made the request
+
+`src/policy.ts` keeps the expected model, prompt version, token limits, retrieval rule, and training rule in one place.
+
+`src/openai.ts` handles the OpenAI request and returns the response text, model information, and token usage to the service.
+
+The OpenAI request uses `store: false` and applies the configured output-token limit.
+
+## Playwright coverage
+
+The project uses browser and API tests together.
+
+### Response quality
+
+`tests/quality.spec.ts` checks the participant-facing experience.
+
+It verifies that an educational answer is returned with its source and that a personal investment request produces refusal language instead of a direct recommendation.
+
+The assertions allow reasonable wording differences from a live model while still checking the required behavior.
+
+### Release controls
+
+`tests/controls.spec.ts` checks the service boundary directly.
+
+It verifies:
+
+- model and prompt version values
+- token limits
+- retrieval behavior
+- the training rule
+- tenant-specific audit evidence
+- request IDs and audit records
+
+Audit JSON is attached to the Playwright HTML report so the test leaves evidence behind.
+
+### Assurance gate
+
+`tests/assurance-gate.spec.ts` runs a small behavior set before promotion.
+
+The current scenarios cover:
+
+- general retirement education
+- a personal investment choice
+- a guaranteed-return request
+
+The gate checks the actual response behavior and expected source use. All current scenarios must pass.
+
+### Resilience
+
+`tests/resilience.spec.ts` intercepts the answer request and forces a `503` response.
+
+This verifies the application's fallback behavior without requiring a real OpenAI outage.
+
+## Run locally
+
+Requirements:
+
+- Node.js 22 or newer
+- npm
+- an OpenAI API key for live mode
+
+Install the project dependencies:
 
 ```bash
 ./requirements.sh
-npm test
 ```
 
-`requirements.sh` installs the Node packages and the Chromium browser used by the suite. `requirements.txt` is included as a quick requirements reference, but npm still uses `package.json` as the real Node dependency file.
+Or install them directly:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Create a local `.env` file in the project root:
+
+```text
+OPENAI_API_KEY=your_api_key
+AI_MODE=live
+```
+
+Then run the suite:
+
+```bash
+npm test
+```
 
 To watch the browser:
 
@@ -56,30 +194,34 @@ To watch the browser:
 npm run test:headed
 ```
 
-To open the HTML report after a run:
+To open the Playwright HTML report after a run:
 
 ```bash
 npm run report
 ```
 
-## How it works
+## CI
 
-`src/server.ts` stands in for a small AI service. It returns an answer, source IDs, token counts, control metadata, and a request ID. It also records an audit event that can be retrieved later.
+The GitHub Actions workflow runs on pushes and pull requests to `main`.
 
-`src/policy.ts` keeps the expected model version, prompt version, token limits, retrieval rule, and training rule in one place. The tests compare live behavior against those values instead of repeating them throughout the suite.
+CI uses:
 
-The Playwright suite uses browser and API coverage together:
+```text
+AI_MODE=mock
+```
 
-- Browser tests verify the participant-facing answer and source display.
-- API tests check version pinning, token limits, retrieval rules, tenant evidence, and audit records.
-- Route mocking forces a service failure so the fallback path is tested without changing the app.
-- The assurance gate runs a small behavior set and fails when the expected pass rate is not met.
-- Audit JSON is attached to the Playwright report so a passing control has evidence, not just a green check.
+This keeps the build repeatable and prevents the repository from requiring an OpenAI API key.
 
-The GitHub Actions workflow runs the same suite on pushes and pull requests. A failed control becomes a failed CI check before a change is merged.
+The workflow installs the locked Node dependencies, installs Chromium, runs the Playwright suite, and keeps the HTML report as a workflow artifact.
+
+A failed assurance control becomes a failed CI check.
 
 ## Scope
 
-This repository does not call a paid model API. The responses are deterministic so anyone can clone the project and get repeatable CI results.
+This project demonstrates how Playwright can be applied beyond basic browser automation to AI-facing quality and release controls.
 
-It also does not claim to be a full model-risk, drift-monitoring, fairness, or FinOps platform. In a live system, this same test structure could point at a real service while larger evaluation sets, calibrated model-scored checks, drift trends, spend attribution, and production telemetry live in the systems built for those jobs.
+It includes a real OpenAI API path, but it is not intended to represent a complete production AI platform.
+
+The local knowledge lookup is deliberately small. A larger system could replace it with a retrieval service or vector store while keeping similar assurance checks around the service boundary.
+
+The project also does not claim to provide full drift monitoring, fairness evaluation, model-risk management, production observability, or FinOps attribution. Those require broader datasets, telemetry, infrastructure, and governance processes than this repository is meant to reproduce.

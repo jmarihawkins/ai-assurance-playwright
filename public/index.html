@@ -3,27 +3,138 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <title>Participant Answer Check</title>
+
   <style>
-    body { font-family: Arial, sans-serif; max-width: 760px; margin: 48px auto; padding: 0 20px; line-height: 1.5; }
-    textarea { width: 100%; min-height: 100px; padding: 10px; }
-    button { margin-top: 12px; padding: 10px 16px; cursor: pointer; }
-    #result { margin-top: 24px; padding: 16px; border: 1px solid #bbb; border-radius: 8px; }
-    #error { color: #8b0000; }
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f5f7fa;
+      color: #1f2933;
+      font-family: Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(760px, calc(100% - 40px));
+      margin: 64px auto;
+    }
+
+    .header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+    }
+
+    .intro {
+      margin: 0;
+      color: #52606d;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #d9e2ec;
+      border-radius: 10px;
+      padding: 24px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border: 1px solid #bcccdc;
+      border-radius: 6px;
+      font: inherit;
+      resize: vertical;
+    }
+
+    textarea:focus {
+      outline: 2px solid #486581;
+      outline-offset: 1px;
+    }
+
+    button {
+      margin-top: 14px;
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 6px;
+      background: #334e68;
+      color: #ffffff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #243b53;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    #result {
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid #d9e2ec;
+    }
+
+    #answer {
+      margin-bottom: 12px;
+    }
+
+    #source {
+      margin-bottom: 0;
+      color: #52606d;
+      font-size: 14px;
+    }
+
+    #error {
+      margin-bottom: 0;
+      color: #9b1c1c;
+      font-weight: 600;
+    }
   </style>
 </head>
+
 <body>
-  <h1>Participant Answer Check</h1>
-  <p>Ask a general retirement-plan question.</p>
-  <label for="question">Question</label>
-  <textarea id="question">How does a target-date fund work?</textarea>
-  <button id="ask">Ask</button>
-  <div id="result" hidden>
-    <strong>Answer</strong>
-    <p id="answer"></p>
-    <p id="source"></p>
-    <p id="error"></p>
-  </div>
+  <main>
+    <div class="header">
+      <h1>Participant Answer Check</h1>
+      <p class="intro">
+        Ask a general retirement-plan question to review the response and supporting source.
+      </p>
+    </div>
+
+    <section class="card">
+      <label for="question">Question</label>
+
+      <textarea id="question">How does a target-date fund work?</textarea>
+
+      <button id="ask" type="button">Ask</button>
+
+      <div id="result" hidden>
+        <strong>Answer</strong>
+        <p id="answer"></p>
+        <p id="source"></p>
+        <p id="error"></p>
+      </div>
+    </section>
+  </main>
 
   <script>
     const button = document.querySelector('#ask');
@@ -31,12 +142,16 @@
     const answer = document.querySelector('#answer');
     const source = document.querySelector('#source');
     const error = document.querySelector('#error');
+    const question = document.querySelector('#question');
 
     button.addEventListener('click', async () => {
       result.hidden = false;
       answer.textContent = '';
       source.textContent = '';
       error.textContent = '';
+
+      button.disabled = true;
+      button.textContent = 'Checking...';
 
       try {
         const response = await fetch('/api/answer', {
@@ -45,16 +160,28 @@
             'content-type': 'application/json',
             'x-tenant-id': 'web-demo'
           },
-          body: JSON.stringify({ question: document.querySelector('#question').value })
+          body: JSON.stringify({
+            question: question.value
+          })
         });
 
-        if (!response.ok) throw new Error('The answer service is unavailable.');
+        if (!response.ok) {
+          throw new Error('The answer service is unavailable.');
+        }
 
         const data = await response.json();
+
         answer.textContent = data.answer;
-        source.textContent = data.sourceIds.length ? `Source: ${data.sourceIds.join(', ')}` : 'Source: not required for this response';
+
+        source.textContent = data.sourceIds.length
+          ? `Source: ${data.sourceIds.join(', ')}`
+          : 'Source: not required for this response';
       } catch {
-        error.textContent = 'The answer service is unavailable. Please try again later.';
+        error.textContent =
+          'The answer service is unavailable. Please try again later.';
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Ask';
       }
     });
   </script>
