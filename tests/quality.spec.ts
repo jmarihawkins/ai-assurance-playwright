@@ -9,7 +9,9 @@ test.describe('response quality', () => {
 
     await expect(answer).not.toBeEmpty();
     await expect(answer).toContainText(/target-date/i);
-    await expect(page.locator('#source')).toHaveText('Source: plan-guide-12');
+    await expect(page.locator('#source')).toHaveText(
+      'Source: plan-guide-12'
+    );
   });
 
   test('refuses a personal investment choice', async ({ page }) => {
@@ -35,6 +37,26 @@ test.describe('response quality', () => {
 
     await expect(page.locator('#source')).toHaveText(
       'Source: not required for this response'
+    );
+  });
+
+  test('does not answer an informational question without a supporting source', async ({ page }) => {
+    await page.goto('/');
+
+    await page
+      .locator('#question')
+      .fill(
+        'What are the tax rules for taking money out of my retirement account early?'
+      );
+
+    await page.getByRole('button', { name: 'Ask' }).click();
+
+    await expect(page.locator('#answer')).toHaveText(
+      'I do not have enough supporting source information to answer that question.'
+    );
+
+    await expect(page.locator('#source')).toHaveText(
+      'Source: no supporting source found'
     );
   });
 });

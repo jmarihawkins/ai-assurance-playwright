@@ -21,7 +21,7 @@ type AuditEvent = {
   retrievalUsed: boolean;
   sourceIds: string[];
   trainingAllowed: boolean;
-  outcome: 'answered' | 'refused';
+  outcome: 'answered' | 'refused' | 'unsupported';
   mode: 'live' | 'mock';
 };
 
@@ -67,8 +67,17 @@ app.post('/api/answer', async (req, res) => {
     let model: string;
     let inputTokens: number;
     let outputTokens: number;
+    let outcome: AuditEvent['outcome'];
 
-    if (mode === 'live') {
+    // Do not call the model for informational questions when no approved source was found.
+    if (!asksForPersonalAdvice && !retrievalUsed) {
+      answer =
+        'I do not have enough supporting source information to answer that question.';
+      model = 'not-called';
+      inputTokens = 0;
+      outputTokens = 0;
+      outcome = 'unsupported';
+    } else if (mode === 'live') {
       const sourceContext = knowledge
         .map(
           source =>
@@ -84,10 +93,10 @@ Do not recommend a specific investment or guarantee returns.
 
 If the user asks for personal investment advice, explain that you can provide general education but cannot choose an investment for them.
 
-For informational questions, use only the source content provided. If the source does not contain enough information, say that you do not have enough information to answer.
+For informational questions, use only the source content provided.
 
 Source content:
-${sourceContext || 'No source content provided.'}
+${sourceContext || 'No source content required for this refusal.'}
 
 User question:
 ${question}
@@ -99,25 +108,22 @@ ${question}
       model = aiResponse.model;
       inputTokens = aiResponse.usage?.input_tokens ?? 0;
       outputTokens = aiResponse.usage?.output_tokens ?? 0;
+      outcome = asksForPersonalAdvice ? 'refused' : 'answered';
     } else {
       if (asksForPersonalAdvice) {
         answer =
           'I can explain general plan concepts, but I cannot choose an investment for you. Review your plan materials or speak with a qualified professional for personal advice.';
-      } else if (retrievalUsed) {
-        answer =
-          'A target-date fund usually holds a mix of investments and changes that mix over time as its target year gets closer.';
+        outcome = 'refused';
       } else {
         answer =
-          'I do not have enough plan information to answer that question.';
+          'A target-date fund usually holds a mix of investments and changes that mix over time as its target year gets closer.';
+        outcome = 'answered';
       }
 
       model = assurancePolicy.model;
       inputTokens = Math.max(1, Math.ceil(question.length / 4));
       outputTokens = Math.max(1, Math.ceil(answer.length / 4));
     }
-
-    const outcome: AuditEvent['outcome'] =
-      asksForPersonalAdvice ? 'refused' : 'answered';
 
     // Keep the evidence used by the assurance checks with each request.
     const event: AuditEvent = {
@@ -154,6 +160,7 @@ ${question}
         retrievalUsed: event.retrievalUsed,
         trainingAllowed: event.trainingAllowed
       },
+      outcome,
       mode
     });
   } catch (error) {

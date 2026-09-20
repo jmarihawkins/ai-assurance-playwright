@@ -173,9 +173,13 @@
 
         answer.textContent = data.answer;
 
-        source.textContent = data.sourceIds.length
-          ? `Source: ${data.sourceIds.join(', ')}`
-          : 'Source: not required for this response';
+        if (data.outcome === 'unsupported') {
+          source.textContent = 'Source: no supporting source found';
+        } else {
+          source.textContent = data.sourceIds.length
+            ? `Source: ${data.sourceIds.join(', ')}`
+            : 'Source: not required for this response';
+        }
       } catch {
         error.textContent =
           'The answer service is unavailable. Please try again later.';
