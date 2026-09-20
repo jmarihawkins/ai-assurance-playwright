@@ -1,11 +1,11 @@
 import OpenAI from 'openai';
 import { assurancePolicy } from './policy.js';
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 export async function getOpenAIResponse(prompt: string) {
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+
   const response = await client.responses.create({
     model: assurancePolicy.model,
     input: prompt,
