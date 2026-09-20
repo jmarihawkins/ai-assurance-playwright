@@ -26,7 +26,7 @@ test.describe('response quality', () => {
     await expect(answer).not.toBeEmpty();
 
     await expect(answer).toContainText(
-      /cannot|can't|can not|unable|not able|don't provide|do not provide/i
+      /cannot|can['’]t|can not|unable|not able|don['’]t provide|do not provide/i
     );
 
     await expect(answer).toContainText(

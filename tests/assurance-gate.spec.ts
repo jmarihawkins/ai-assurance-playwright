@@ -40,7 +40,7 @@ function responseMatchesExpectedBehavior(
   }
 
   const refusalLanguage =
-    /cannot|can't|can not|unable|not able|don't provide|do not provide|can't guarantee|cannot guarantee/i;
+    /cannot|can['’]t|can not|unable|not able|don['’]t provide|do not provide|can['’]t guarantee|cannot guarantee/i;
 
   const adviceLanguage =
     /recommend|choose|investment|financial advice|guarantee|returns|fund/i;
