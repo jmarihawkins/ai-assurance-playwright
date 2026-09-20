@@ -9,8 +9,14 @@ test.describe('release controls', () => {
     });
 
     expect(response.ok()).toBeTruthy();
-    expect(response.headers()['x-model-version']).toBe(assurancePolicy.model);
-    expect(response.headers()['x-prompt-version']).toBe(assurancePolicy.promptVersion);
+
+    expect(response.headers()['x-model-version']).toBe(
+      assurancePolicy.model
+    );
+
+    expect(response.headers()['x-prompt-version']).toBe(
+      assurancePolicy.promptVersion
+    );
   });
 
   test('keeps token use inside the allowed budget', async ({ request }) => {
@@ -18,10 +24,18 @@ test.describe('release controls', () => {
       headers: { 'x-tenant-id': 'tenant-a' },
       data: { question: 'How does a target-date fund work?' }
     });
+
+    expect(response.ok()).toBeTruthy();
+
     const body = await response.json();
 
-    expect(body.usage.inputTokens).toBeLessThanOrEqual(assurancePolicy.maxInputTokens);
-    expect(body.usage.outputTokens).toBeLessThanOrEqual(assurancePolicy.maxOutputTokens);
+    expect(body.usage.inputTokens).toBeLessThanOrEqual(
+      assurancePolicy.maxInputTokens
+    );
+
+    expect(body.usage.outputTokens).toBeLessThanOrEqual(
+      assurancePolicy.maxOutputTokens
+    );
   });
 
   test('requires retrieval for an informational answer and blocks training', async ({ request }) => {
@@ -29,10 +43,18 @@ test.describe('release controls', () => {
       headers: { 'x-tenant-id': 'tenant-b' },
       data: { question: 'How does a target-date fund work?' }
     });
+
+    expect(response.ok()).toBeTruthy();
+
     const body = await response.json();
 
-    expect(body.controls.retrievalUsed).toBe(assurancePolicy.requireRetrieval);
-    expect(body.controls.trainingAllowed).toBe(false);
+    expect(body.controls.retrievalUsed).toBe(
+      assurancePolicy.requireRetrieval
+    );
+
+    expect(body.controls.trainingAllowed).toBe(
+      assurancePolicy.trainingAllowed
+    );
   });
 
   test('keeps audit evidence tied to the correct tenant', async ({ request }) => {
@@ -40,17 +62,30 @@ test.describe('release controls', () => {
       headers: { 'x-tenant-id': 'tenant-a' },
       data: { question: 'How does a target-date fund work?' }
     });
+
     const responseB = await request.post('/api/answer', {
       headers: { 'x-tenant-id': 'tenant-b' },
       data: { question: 'How does a target-date fund work?' }
     });
 
-    const auditA = await request.get(`/api/audit/${responseA.headers()['x-request-id']}`);
-    const auditB = await request.get(`/api/audit/${responseB.headers()['x-request-id']}`);
+    expect(responseA.ok()).toBeTruthy();
+    expect(responseB.ok()).toBeTruthy();
+
+    const requestIdA = responseA.headers()['x-request-id'];
+    const requestIdB = responseB.headers()['x-request-id'];
+
+    expect(requestIdA).toBeTruthy();
+    expect(requestIdB).toBeTruthy();
+    expect(requestIdA).not.toBe(requestIdB);
+
+    const auditA = await request.get(`/api/audit/${requestIdA}`);
+    const auditB = await request.get(`/api/audit/${requestIdB}`);
+
+    expect(auditA.ok()).toBeTruthy();
+    expect(auditB.ok()).toBeTruthy();
 
     expect((await auditA.json()).tenantId).toBe('tenant-a');
     expect((await auditB.json()).tenantId).toBe('tenant-b');
-    expect(responseA.headers()['x-request-id']).not.toBe(responseB.headers()['x-request-id']);
   });
 
   test('creates audit evidence for each request', async ({ request }, testInfo) => {
@@ -59,10 +94,16 @@ test.describe('release controls', () => {
       data: { question: 'How does a target-date fund work?' }
     });
 
+    expect(answerResponse.ok()).toBeTruthy();
+
     const requestId = answerResponse.headers()['x-request-id'];
+
     expect(requestId).toBeTruthy();
 
     const auditResponse = await request.get(`/api/audit/${requestId}`);
+
+    expect(auditResponse.ok()).toBeTruthy();
+
     const audit = await auditResponse.json();
 
     expect(audit.requestId).toBe(requestId);
@@ -70,6 +111,7 @@ test.describe('release controls', () => {
     expect(audit.model).toBe(assurancePolicy.model);
     expect(audit.promptVersion).toBe(assurancePolicy.promptVersion);
     expect(audit.outcome).toBe('answered');
+    expect(audit.mode).toMatch(/live|mock/);
 
     // The audit record is attached to the HTML report so the test leaves evidence behind.
     await testInfo.attach('audit-evidence', {
