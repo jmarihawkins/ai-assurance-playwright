@@ -1,8 +1,11 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { assurancePolicy } from './policy.js';
+import { getOpenAIResponse } from './openai.js';
+import { findKnowledge } from './knowledge.js';
 
 const app = express();
 const port = 4173;
@@ -16,8 +19,10 @@ type AuditEvent = {
   inputTokens: number;
   outputTokens: number;
   retrievalUsed: boolean;
+  sourceIds: string[];
   trainingAllowed: boolean;
   outcome: 'answered' | 'refused';
+  mode: 'live' | 'mock';
 };
 
 const auditEvents: AuditEvent[] = [];
@@ -26,65 +31,157 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    mode: process.env.AI_MODE === 'live' ? 'live' : 'mock'
+  });
 });
 
-app.post('/api/answer', (req, res) => {
+app.post('/api/answer', async (req, res) => {
   const tenantId = String(req.header('x-tenant-id') || 'demo-tenant');
   const question = String(req.body?.question || '').trim();
   const requestId = randomUUID();
 
-  // The demo uses a simple estimate so token budgets can be tested without a paid model call.
-  const inputTokens = Math.max(1, Math.ceil(question.length / 4));
-  const asksForPersonalAdvice = /what should i invest|tell me what to buy|guarantee/i.test(question);
+  const mode: AuditEvent['mode'] =
+    process.env.AI_MODE === 'live' ? 'live' : 'mock';
 
-  const answer = asksForPersonalAdvice
-    ? 'I can explain general plan concepts, but I cannot choose an investment for you. Review your plan materials or speak with a qualified professional for personal advice.'
-    : 'A target-date fund usually holds a mix of investments and changes that mix over time as its target year gets closer.';
+  if (!question) {
+    return res.status(400).json({
+      error: 'Question is required'
+    });
+  }
 
-  const sourceIds = asksForPersonalAdvice ? [] : ['plan-guide-12'];
-  const outputTokens = Math.max(1, Math.ceil(answer.length / 4));
-  const outcome: AuditEvent['outcome'] = asksForPersonalAdvice ? 'refused' : 'answered';
+  const asksForPersonalAdvice =
+    /what should i invest|tell me what to buy|guarantee/i.test(question);
 
-  // This audit record stands in for evidence a real service would send to durable storage.
-  const event: AuditEvent = {
-    requestId,
-    tenantId,
-    model: assurancePolicy.model,
-    promptVersion: assurancePolicy.promptVersion,
-    inputTokens,
-    outputTokens,
-    retrievalUsed: sourceIds.length > 0,
-    trainingAllowed: assurancePolicy.trainingAllowed,
-    outcome
-  };
+  // Personal advice requests are refused without looking up plan content.
+  const knowledge = asksForPersonalAdvice
+    ? []
+    : findKnowledge(question);
 
-  auditEvents.push(event);
+  const sourceIds = knowledge.map(source => source.id);
+  const retrievalUsed = knowledge.length > 0;
 
-  res.setHeader('x-model-version', assurancePolicy.model);
-  res.setHeader('x-prompt-version', assurancePolicy.promptVersion);
-  res.setHeader('x-request-id', requestId);
-  res.json({
-    answer,
-    sourceIds,
-    usage: { inputTokens, outputTokens },
-    controls: {
-      retrievalUsed: event.retrievalUsed,
-      trainingAllowed: event.trainingAllowed
+  try {
+    let answer: string;
+    let model: string;
+    let inputTokens: number;
+    let outputTokens: number;
+
+    if (mode === 'live') {
+      const sourceContext = knowledge
+        .map(
+          source =>
+            `[${source.id}] ${source.title}\n${source.content}`
+        )
+        .join('\n\n');
+
+      const prompt = `
+You are an educational assistant for a retirement plan.
+
+Give clear general information only.
+Do not recommend a specific investment or guarantee returns.
+
+If the user asks for personal investment advice, explain that you can provide general education but cannot choose an investment for them.
+
+For informational questions, use only the source content provided. If the source does not contain enough information, say that you do not have enough information to answer.
+
+Source content:
+${sourceContext || 'No source content provided.'}
+
+User question:
+${question}
+      `.trim();
+
+      const aiResponse = await getOpenAIResponse(prompt);
+
+      answer = aiResponse.text;
+      model = aiResponse.model;
+      inputTokens = aiResponse.usage?.input_tokens ?? 0;
+      outputTokens = aiResponse.usage?.output_tokens ?? 0;
+    } else {
+      if (asksForPersonalAdvice) {
+        answer =
+          'I can explain general plan concepts, but I cannot choose an investment for you. Review your plan materials or speak with a qualified professional for personal advice.';
+      } else if (retrievalUsed) {
+        answer =
+          'A target-date fund usually holds a mix of investments and changes that mix over time as its target year gets closer.';
+      } else {
+        answer =
+          'I do not have enough plan information to answer that question.';
+      }
+
+      model = assurancePolicy.model;
+      inputTokens = Math.max(1, Math.ceil(question.length / 4));
+      outputTokens = Math.max(1, Math.ceil(answer.length / 4));
     }
-  });
+
+    const outcome: AuditEvent['outcome'] =
+      asksForPersonalAdvice ? 'refused' : 'answered';
+
+    // Keep the evidence used by the assurance checks with each request.
+    const event: AuditEvent = {
+      requestId,
+      tenantId,
+      model,
+      promptVersion: assurancePolicy.promptVersion,
+      inputTokens,
+      outputTokens,
+      retrievalUsed,
+      sourceIds,
+      trainingAllowed: assurancePolicy.trainingAllowed,
+      outcome,
+      mode
+    };
+
+    auditEvents.push(event);
+
+    res.setHeader('x-model-version', model);
+    res.setHeader(
+      'x-prompt-version',
+      assurancePolicy.promptVersion
+    );
+    res.setHeader('x-request-id', requestId);
+
+    res.json({
+      answer,
+      sourceIds,
+      usage: {
+        inputTokens,
+        outputTokens
+      },
+      controls: {
+        retrievalUsed: event.retrievalUsed,
+        trainingAllowed: event.trainingAllowed
+      },
+      mode
+    });
+  } catch (error) {
+    console.error('AI request failed:', error);
+
+    res.status(503).json({
+      error: 'AI service is temporarily unavailable',
+      requestId
+    });
+  }
 });
 
 app.get('/api/audit/:requestId', (req, res) => {
-  const event = auditEvents.find(item => item.requestId === req.params.requestId);
+  const event = auditEvents.find(
+    item => item.requestId === req.params.requestId
+  );
 
   if (!event) {
-    return res.status(404).json({ error: 'Audit event not found' });
+    return res.status(404).json({
+      error: 'Audit event not found'
+    });
   }
 
   res.json(event);
 });
 
 app.listen(port, '127.0.0.1', () => {
-  console.log(`Assurance demo running on http://127.0.0.1:${port}`);
+  console.log(
+    `Assurance demo running on http://127.0.0.1:${port}`
+  );
 });

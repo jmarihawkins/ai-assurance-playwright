@@ -3,3 +3,5 @@ playwright-report/
 test-results/
 evidence/*.json
 .DS_Store
+.env
+.env.local
