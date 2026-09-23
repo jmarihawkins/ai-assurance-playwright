@@ -167,6 +167,8 @@ The gate checks the actual response behavior and expected source use. All curren
 
 This verifies the application's fallback behavior without requiring a real OpenAI outage.
 
+The same file checks the reply handling in `src/openai.ts` directly. A cut-off or empty model reply is treated as a failure and a complete reply is passed through. These checks use fake reply objects instead of the API, so they also run in CI.
+
 ## Run locally
 
 Requirements:
