@@ -94,6 +94,8 @@ This is intentionally a small retrieval example rather than a full vector-search
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
 
+The audit `outcome` records how the server routed the request, not a judgment of the model's reply. The refusal wording itself is checked by the Playwright tests against the actual response text.
+
 Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question, so the full prompt token count is still checked from the API usage in live mode.
 
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
@@ -116,7 +118,7 @@ A successful request produces:
 
 `src/openai.ts` handles the OpenAI request and returns the response text, model information, and token usage to the service.
 
-The OpenAI request uses `store: false` and applies the configured output-token limit.
+The OpenAI request uses `store: false`, applies the configured output-token limit, and asks for low reasoning effort because reasoning tokens count against that limit. The prompt asks for answers under 80 words so they fit inside that limit. An incomplete or empty reply is treated as a service failure, so the page shows the fallback message instead of a blank or cut-off answer.
 
 ## Playwright coverage
 
@@ -182,7 +184,7 @@ Install the project dependencies:
 Or install them directly:
 
 ```bash
-npm install
+npm ci
 npx playwright install chromium
 ```
 
