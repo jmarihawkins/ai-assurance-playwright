@@ -38,6 +38,36 @@ test.describe('release controls', () => {
     );
   });
 
+  test('rejects a question over the input token budget before calling the model', async ({ request }) => {
+    // Starts with a supported question so a missing check would still retrieve a source.
+    const oversizedQuestion =
+      'How does a target-date fund work? ' +
+      'x'.repeat(assurancePolicy.maxInputTokens * 4);
+
+    const response = await request.post('/api/answer', {
+      headers: { 'x-tenant-id': 'tenant-a' },
+      data: { question: oversizedQuestion }
+    });
+
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
+
+    expect(body.outcome).toBe('rejected');
+    expect(body.sourceIds).toEqual([]);
+    expect(body.controls.retrievalUsed).toBe(false);
+    expect(body.usage.inputTokens).toBe(0);
+    expect(body.usage.outputTokens).toBe(0);
+
+    const auditResponse = await request.get(
+      `/api/audit/${response.headers()['x-request-id']}`,
+      { headers: { 'x-tenant-id': 'tenant-a' } }
+    );
+
+    expect(auditResponse.ok()).toBeTruthy();
+    expect((await auditResponse.json()).model).toBe('not-called');
+  });
+
   test('requires retrieval for an informational answer and blocks training', async ({ request }) => {
     const response = await request.post('/api/answer', {
       headers: { 'x-tenant-id': 'tenant-b' },

@@ -21,7 +21,7 @@ type AuditEvent = {
   retrievalUsed: boolean;
   sourceIds: string[];
   trainingAllowed: boolean;
-  outcome: 'answered' | 'refused' | 'unsupported';
+  outcome: 'answered' | 'refused' | 'unsupported' | 'rejected';
   mode: 'live' | 'mock';
 };
 
@@ -54,8 +54,14 @@ app.post('/api/answer', async (req, res) => {
   const asksForPersonalAdvice =
     /what should i invest|tell me what to buy|guarantee (which|what|me)\b/i.test(question);
 
-  // Personal advice requests are refused without looking up plan content.
-  const knowledge = asksForPersonalAdvice
+  // Rough estimate of about 4 characters per token. The full prompt is larger,
+  // so this only blocks questions that are already over budget on their own.
+  const estimatedQuestionTokens = Math.max(1, Math.ceil(question.length / 4));
+  const exceedsInputBudget =
+    estimatedQuestionTokens > assurancePolicy.maxInputTokens;
+
+  // Personal advice and oversized requests are handled without looking up plan content.
+  const knowledge = asksForPersonalAdvice || exceedsInputBudget
     ? []
     : findKnowledge(question);
 
@@ -69,12 +75,19 @@ app.post('/api/answer', async (req, res) => {
     let outputTokens: number;
     let outcome: AuditEvent['outcome'];
 
-    // Do not call the model for informational questions when no approved source was found.
-    if (
+    if (exceedsInputBudget) {
+      answer =
+        'That question is too long to process. Please shorten it and try again.';
+      model = 'not-called';
+      inputTokens = 0;
+      outputTokens = 0;
+      outcome = 'rejected';
+    } else if (
       !asksForPersonalAdvice &&
       assurancePolicy.requireRetrieval &&
       !retrievalUsed
     ) {
+      // Do not call the model for informational questions when no approved source was found.
       answer =
         'I do not have enough supporting source information to answer that question.';
       model = 'not-called';
@@ -125,7 +138,7 @@ ${question}
       }
 
       model = assurancePolicy.model;
-      inputTokens = Math.max(1, Math.ceil(question.length / 4));
+      inputTokens = estimatedQuestionTokens;
       outputTokens = Math.max(1, Math.ceil(answer.length / 4));
     }
 

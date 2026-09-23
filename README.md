@@ -14,7 +14,7 @@ The application is intentionally small. The focus is on how browser and API test
 | Refusal behavior | Requests for personal investment choices or guaranteed returns are refused |
 | Unsupported questions | Informational questions with no approved source get an unsupported answer and the model is not called |
 | Model and prompt control | The expected model and prompt versions are visible and checked |
-| Token budget | Input and output token use stays within defined limits |
+| Token budget | Questions already over the input budget are rejected before the model call, and token use on answered requests stays within defined limits |
 | Retrieval rule | Supported informational questions use the expected knowledge source |
 | Training rule | Responses and audit records carry the policy's `trainingAllowed` value |
 | Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant |
@@ -94,6 +94,8 @@ This is intentionally a small retrieval example rather than a full vector-search
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
 
+Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question, so the full prompt token count is still checked from the API usage in live mode.
+
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
 ## How the service works
@@ -135,7 +137,7 @@ The assertions allow reasonable wording differences from a live model while stil
 It verifies:
 
 - model and prompt version values
-- token limits
+- token limits, including rejecting an oversized question before the model call
 - retrieval behavior
 - the training rule
 - tenant-specific audit evidence, including that one tenant cannot read another tenant's audit record

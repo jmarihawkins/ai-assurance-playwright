@@ -175,6 +175,8 @@
 
         if (data.outcome === 'unsupported') {
           source.textContent = 'Source: no supporting source found';
+        } else if (data.outcome === 'rejected') {
+          source.textContent = 'Source: not checked because the question was too long';
         } else {
           source.textContent = data.sourceIds.length
             ? `Source: ${data.sourceIds.join(', ')}`
