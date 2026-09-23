@@ -78,14 +78,43 @@ test.describe('release controls', () => {
     expect(requestIdB).toBeTruthy();
     expect(requestIdA).not.toBe(requestIdB);
 
-    const auditA = await request.get(`/api/audit/${requestIdA}`);
-    const auditB = await request.get(`/api/audit/${requestIdB}`);
+    const auditA = await request.get(`/api/audit/${requestIdA}`, {
+      headers: { 'x-tenant-id': 'tenant-a' }
+    });
+
+    const auditB = await request.get(`/api/audit/${requestIdB}`, {
+      headers: { 'x-tenant-id': 'tenant-b' }
+    });
 
     expect(auditA.ok()).toBeTruthy();
     expect(auditB.ok()).toBeTruthy();
 
     expect((await auditA.json()).tenantId).toBe('tenant-a');
     expect((await auditB.json()).tenantId).toBe('tenant-b');
+  });
+
+  test('does not return audit evidence to a different tenant', async ({ request }) => {
+    const answerResponse = await request.post('/api/answer', {
+      headers: { 'x-tenant-id': 'tenant-a' },
+      data: { question: 'How does a target-date fund work?' }
+    });
+
+    expect(answerResponse.ok()).toBeTruthy();
+
+    const requestId = answerResponse.headers()['x-request-id'];
+
+    expect(requestId).toBeTruthy();
+
+    const ownerAudit = await request.get(`/api/audit/${requestId}`, {
+      headers: { 'x-tenant-id': 'tenant-a' }
+    });
+
+    const otherTenantAudit = await request.get(`/api/audit/${requestId}`, {
+      headers: { 'x-tenant-id': 'tenant-b' }
+    });
+
+    expect(ownerAudit.status()).toBe(200);
+    expect(otherTenantAudit.status()).toBe(404);
   });
 
   test('creates audit evidence for each request', async ({ request }, testInfo) => {
@@ -100,7 +129,9 @@ test.describe('release controls', () => {
 
     expect(requestId).toBeTruthy();
 
-    const auditResponse = await request.get(`/api/audit/${requestId}`);
+    const auditResponse = await request.get(`/api/audit/${requestId}`, {
+      headers: { 'x-tenant-id': 'tenant-a' }
+    });
 
     expect(auditResponse.ok()).toBeTruthy();
 

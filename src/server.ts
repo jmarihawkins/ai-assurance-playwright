@@ -52,7 +52,7 @@ app.post('/api/answer', async (req, res) => {
   }
 
   const asksForPersonalAdvice =
-    /what should i invest|tell me what to buy|guarantee/i.test(question);
+    /what should i invest|tell me what to buy|guarantee (which|what|me)\b/i.test(question);
 
   // Personal advice requests are refused without looking up plan content.
   const knowledge = asksForPersonalAdvice
@@ -70,7 +70,11 @@ app.post('/api/answer', async (req, res) => {
     let outcome: AuditEvent['outcome'];
 
     // Do not call the model for informational questions when no approved source was found.
-    if (!asksForPersonalAdvice && !retrievalUsed) {
+    if (
+      !asksForPersonalAdvice &&
+      assurancePolicy.requireRetrieval &&
+      !retrievalUsed
+    ) {
       answer =
         'I do not have enough supporting source information to answer that question.';
       model = 'not-called';
@@ -115,8 +119,8 @@ ${question}
           'I can explain general plan concepts, but I cannot choose an investment for you. Review your plan materials or speak with a qualified professional for personal advice.';
         outcome = 'refused';
       } else {
-        answer =
-          'A target-date fund usually holds a mix of investments and changes that mix over time as its target year gets closer.';
+        // Answer from the retrieved source so CI still exercises the grounding path.
+        answer = knowledge.map(source => source.content).join(' ');
         outcome = 'answered';
       }
 
@@ -174,8 +178,13 @@ ${question}
 });
 
 app.get('/api/audit/:requestId', (req, res) => {
+  const tenantId = String(req.header('x-tenant-id') || 'demo-tenant');
+
+  // Only return evidence to the tenant that created the request.
   const event = auditEvents.find(
-    item => item.requestId === req.params.requestId
+    item =>
+      item.requestId === req.params.requestId &&
+      item.tenantId === tenantId
   );
 
   if (!event) {

@@ -12,11 +12,12 @@ The application is intentionally small. The focus is on how browser and API test
 | --- | --- |
 | Grounded response | A supported informational answer returns the expected source |
 | Refusal behavior | Requests for personal investment choices or guaranteed returns are refused |
+| Unsupported questions | Informational questions with no approved source get an unsupported answer and the model is not called |
 | Model and prompt control | The expected model and prompt versions are visible and checked |
 | Token budget | Input and output token use stays within defined limits |
 | Retrieval rule | Supported informational questions use the expected knowledge source |
-| Training rule | The service reports that tenant data is not allowed for training |
-| Tenant evidence | Audit records stay tied to the tenant that created the request |
+| Training rule | Responses and audit records carry the policy's `trainingAllowed` value |
+| Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant |
 | Audit evidence | Each successful request receives an ID and matching audit record |
 | Release gate | A small behavior set must meet the required pass rate |
 | Graceful failure | The page shows a clear fallback when the answer service fails |
@@ -74,6 +75,10 @@ Mock mode returns deterministic responses without making an external API call.
 
 GitHub Actions uses this mode so pull requests and pushes can run the same assurance suite without requiring an API key or depending on a live model response.
 
+Mock answers for supported questions are built from the retrieved source text, so CI still goes through the retrieval path. Refusals use a fixed response.
+
+In mock mode the model name comes from `src/policy.ts` rather than an API response, and token counts are estimates. The model and token checks confirm those values reach the response and audit evidence, but they only compare against a real API response in live mode. The same applies to `trainingAllowed`, which is a policy value recorded with each request, not something the tests can observe the provider enforcing.
+
 ## Grounding
 
 `src/knowledge.ts` contains a small source used for the target-date fund example.
@@ -88,6 +93,8 @@ For supported informational questions, the server:
 This is intentionally a small retrieval example rather than a full vector-search or RAG platform. It gives the tests a real source boundary to verify without adding infrastructure that is outside the purpose of the project.
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
+
+When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
 ## How the service works
 
@@ -117,7 +124,7 @@ The project uses browser and API tests together.
 
 `tests/quality.spec.ts` checks the participant-facing experience.
 
-It verifies that an educational answer is returned with its source and that a personal investment request produces refusal language instead of a direct recommendation.
+It verifies that an educational answer is returned with its source, that a personal investment request produces refusal language instead of a direct recommendation, and that a question with no approved source gets the unsupported message.
 
 The assertions allow reasonable wording differences from a live model while still checking the required behavior.
 
@@ -131,7 +138,7 @@ It verifies:
 - token limits
 - retrieval behavior
 - the training rule
-- tenant-specific audit evidence
+- tenant-specific audit evidence, including that one tenant cannot read another tenant's audit record
 - request IDs and audit records
 
 Audit JSON is attached to the Playwright HTML report so the test leaves evidence behind.
@@ -145,6 +152,8 @@ The current scenarios cover:
 - general retirement education
 - a personal investment choice
 - a guaranteed-return request
+- a question about guarantees that the approved source does cover, which should be answered rather than refused
+- an informational question with no approved source, which should return the unsupported message without a model call
 
 The gate checks the actual response behavior and expected source use. All current scenarios must pass.
 
