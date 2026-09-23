@@ -1,6 +1,6 @@
 # AI Assurance Checks with Playwright
 
-This project uses Playwright and TypeScript to test the control layer around a small AI-backed participant experience.
+This project uses Playwright and TypeScript to test the control layer around an AI-backed participant experience.
 
 The service can send retirement education questions to the OpenAI API, ground supported questions with local plan content, record request evidence, and expose the controls that Playwright verifies.
 
@@ -11,15 +11,15 @@ The application is intentionally small. The focus is on how browser and API test
 | Control | What the test verifies |
 | --- | --- |
 | Grounded response | A supported informational answer returns the expected source |
-| Refusal behavior | Requests for personal investment choices or guaranteed returns are refused |
+| Refusal behavior | Requests to choose an investment or to guarantee which fund will earn the most are refused |
 | Unsupported questions | Informational questions with no approved source get an unsupported answer and the model is not called |
 | Model and prompt control | The expected model and prompt versions are visible and checked |
-| Token budget | Questions already over the input budget are rejected before the model call, and token use on answered requests stays within defined limits |
+| Token budget | Questions already over the input budget are rejected before the model call, and a test checks that token use for a supported question stays within defined limits |
 | Retrieval rule | Supported informational questions use the expected knowledge source |
 | Training rule | Responses and audit records carry the policy's `trainingAllowed` value |
 | Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant |
 | Audit evidence | Each successful request receives an ID and matching audit record |
-| Release gate | A small behavior set must meet the required pass rate |
+| Release gate | Every scenario in a fixed behavior set must pass |
 | Graceful failure | The page shows a clear fallback when the answer service fails |
 
 ## Project layout
@@ -73,15 +73,15 @@ The `.env` file is ignored by Git and should never be committed.
 
 Mock mode returns deterministic responses without making an external API call.
 
-GitHub Actions uses this mode so pull requests and pushes can run the same assurance suite without requiring an API key or depending on a live model response.
+GitHub Actions uses this mode so CI can run the same assurance suite without requiring an API key or depending on a live model response.
 
 Mock answers for supported questions are built from the retrieved source text, so CI still goes through the retrieval path. Refusals use a fixed response.
 
-In mock mode the model name comes from `src/policy.ts` rather than an API response, and token counts are estimates. The model and token checks confirm those values reach the response and audit evidence, but they only compare against a real API response in live mode. The same applies to `trainingAllowed`, which is a policy value recorded with each request, not something the tests can observe the provider enforcing.
+In mock mode the model name comes from `src/policy.ts` rather than an API response, and token counts are estimates. The model and token checks confirm those values are passed through, but they only compare against a real API response in live mode. The same applies to `trainingAllowed`, which is a policy value recorded with each request, not something the tests can observe the provider enforcing.
 
 ## Grounding
 
-`src/knowledge.ts` contains a small source used for the target-date fund example.
+`src/knowledge.ts` contains a single approved source used for the target-date fund example.
 
 For supported informational questions, the server:
 
@@ -90,13 +90,13 @@ For supported informational questions, the server:
 3. returns the source ID with the answer
 4. records the source ID in the audit event
 
-This is intentionally a small retrieval example rather than a full vector-search or RAG platform. It gives the tests a real source boundary to verify without adding infrastructure that is outside the purpose of the project.
+This is a keyword lookup, not a vector search or RAG platform. It gives the tests a real source boundary to verify without adding infrastructure that is outside the purpose of the project.
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
 
 The audit `outcome` records how the server routed the request, not a judgment of the model's reply. The refusal wording itself is checked by the Playwright tests against the actual response text.
 
-Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question, so the full prompt token count is still checked from the API usage in live mode.
+Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question. The full prompt is not checked before the call. In live mode, the token budget test compares the API-reported usage for the target-date question against the policy.
 
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
@@ -145,11 +145,11 @@ It verifies:
 - tenant-specific audit evidence, including that one tenant cannot read another tenant's audit record
 - request IDs and audit records
 
-Audit JSON is attached to the Playwright HTML report so the test leaves evidence behind.
+One control test attaches its audit JSON to the Playwright HTML report so the run leaves evidence behind.
 
 ### Assurance gate
 
-`tests/assurance-gate.spec.ts` runs a small behavior set before promotion.
+`tests/assurance-gate.spec.ts` runs a fixed set of behavior scenarios before promotion.
 
 The current scenarios cover:
 
@@ -175,13 +175,13 @@ Requirements:
 - npm
 - an OpenAI API key for live mode
 
-Install the project dependencies:
+Install the project dependencies from Git Bash or WSL:
 
 ```bash
 ./requirements.sh
 ```
 
-Or install them directly:
+Or run the same commands directly, including from PowerShell:
 
 ```bash
 npm ci
@@ -215,7 +215,7 @@ npm run report
 
 ## CI
 
-The GitHub Actions workflow runs on pushes and pull requests to `main`.
+The GitHub Actions workflow runs on pushes and pull requests to `main`, and every Monday on a schedule so runner image or action changes show up even when nothing is pushed.
 
 CI uses:
 
@@ -227,14 +227,16 @@ This keeps the build repeatable and prevents the repository from requiring an Op
 
 The workflow installs the locked Node dependencies, installs Chromium, runs the Playwright suite, and keeps the HTML report as a workflow artifact.
 
-A failed assurance control becomes a failed CI check.
+Any failing test fails the CI run.
 
 ## Scope
 
-This project demonstrates how Playwright can be applied beyond basic browser automation to AI-facing quality and release controls.
+Playwright is used here for AI-facing quality and release controls, not only browser automation.
 
-It includes a real OpenAI API path, but it is not intended to represent a complete production AI platform.
+The project includes a real OpenAI API path, but it is not meant to be a complete production AI platform.
 
-The local knowledge lookup is deliberately small. A larger system could replace it with a retrieval service or vector store while keeping similar assurance checks around the service boundary.
+Tenant IDs come from the `x-tenant-id` request header and are not authenticated. The tenant checks cover how evidence is recorded and returned per tenant, not tenant isolation.
+
+A larger system could replace the knowledge lookup with a retrieval service or vector store while keeping similar assurance checks around the service boundary.
 
 The project also does not claim to provide full drift monitoring, fairness evaluation, model-risk management, production observability, or FinOps attribution. Those require broader datasets, telemetry, infrastructure, and governance processes than this repository is meant to reproduce.
