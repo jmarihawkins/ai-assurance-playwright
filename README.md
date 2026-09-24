@@ -18,7 +18,7 @@ The application is intentionally small. The focus is on how browser and API test
 | Retrieval rule | Supported informational questions use the expected knowledge source |
 | Training rule | Responses and audit records carry the policy's `trainingAllowed` value |
 | Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant |
-| Audit evidence | Each successful request receives an ID and matching audit record |
+| Audit evidence | Each answered, refused, unsupported, rejected, or failed request has a request ID and matching audit record |
 | Release gate | Every scenario in a fixed behavior set must pass |
 | Graceful failure | The page shows a clear fallback when the answer service fails |
 
@@ -40,7 +40,9 @@ The application is intentionally small. The focus is on how browser and API test
 │   └── resilience.spec.ts
 ├── .github/
 │   └── workflows/
+│       ├── live-checks.yml
 │       └── playwright.yml
+├── .env.example
 ├── .gitignore
 ├── package.json
 ├── package-lock.json
@@ -60,20 +62,13 @@ Live mode sends the request through the OpenAI Responses API.
 
 The model, prompt version, and token limits are defined in `src/policy.ts`. The API call is kept in `src/openai.ts` so model access stays separate from the application and test logic.
 
-Local settings are read from a `.env` file:
-
-```text
-OPENAI_API_KEY=your_api_key
-AI_MODE=live
-```
-
-The `.env` file is ignored by Git and should never be committed.
+Local settings are read from a `.env` file. `.env.example` lists the variables with an empty key. `.gitignore` excludes `.env` and any `.env.*` file except the example, so a real key stays on your machine.
 
 ### Mock mode
 
 Mock mode returns deterministic responses without making an external API call.
 
-GitHub Actions uses this mode so CI can run the same assurance suite without requiring an API key or depending on a live model response.
+The main GitHub Actions workflow uses this mode so CI can run the same assurance suite without requiring an API key or depending on a live model response.
 
 Mock answers for supported questions are built from the retrieved source text, so CI still goes through the retrieval path. Refusals use a fixed response.
 
@@ -97,6 +92,8 @@ Personal investment requests do not use the informational source. They are handl
 The audit `outcome` records how the server routed the request, not a judgment of the model's reply. The refusal wording itself is checked by the Playwright tests against the actual response text.
 
 Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question. The full prompt is not checked before the call. In live mode, the token budget test compares the API-reported usage for the target-date question against the policy.
+
+If the model call fails, the server returns a `503` with the request ID and records a `failed` outcome. Token counts on that record are `null` because usage is not available from a failed call.
 
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
@@ -167,7 +164,7 @@ The gate checks the actual response behavior and expected source use. All curren
 
 This verifies the application's fallback behavior without requiring a real OpenAI outage.
 
-Playwright also starts a second server on port 4174 in live mode, with its OpenAI base URL pointed at local port 9 and a placeholder key. Node's `fetch` refuses to connect to that port, so no request leaves the machine. Every model call on that server fails, and a test checks that the server returns a `503` with its error body.
+Playwright also starts a second server on port 4174 in live mode, with its OpenAI base URL pointed at local port 9 and a placeholder key. Node's `fetch` refuses to connect to that port, so no request leaves the machine. Every model call on that server fails. The tests check that the server returns a `503` with its error body and records the failure in the audit trail.
 
 The same file checks the reply handling in `src/openai.ts` directly. A cut-off or empty model reply is treated as a failure and a complete reply is passed through. These checks use fake reply objects instead of the API, so they also run in CI.
 
@@ -192,12 +189,13 @@ npm ci
 npx playwright install chromium
 ```
 
-Create a local `.env` file in the project root:
+Copy the example settings file and add your key to `.env`:
 
-```text
-OPENAI_API_KEY=your_api_key
-AI_MODE=live
+```bash
+cp .env.example .env
 ```
+
+In PowerShell, use `Copy-Item .env.example .env`.
 
 Then run the suite:
 
@@ -232,6 +230,8 @@ This keeps the build repeatable and prevents the repository from requiring an Op
 The workflow installs the locked Node dependencies, installs Chromium, runs the Playwright suite, and keeps the HTML report as a workflow artifact.
 
 Any failing test fails the CI run.
+
+A second workflow, `live-checks.yml`, runs the same suite against the real model. It only runs when started from the Actions tab with **Run workflow**, which needs write access to the repository. It reads the key from a repository secret named `OPENAI_API_KEY`, set under **Settings > Secrets and variables > Actions**. GitHub masks secrets in logs and does not pass them to runs triggered from forks.
 
 ## Scope
 

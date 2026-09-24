@@ -1,0 +1,36 @@
+name: Live model checks
+
+# Runs the suite against the real model. Manual only, since each run
+# makes live API calls on the repository owner's key.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run assurance checks against the live model
+        run: npm test
+        env:
+          AI_MODE: live
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-live
+          path: playwright-report/
+          retention-days: 14
