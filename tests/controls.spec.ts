@@ -147,6 +147,52 @@ test.describe('release controls', () => {
     expect(otherTenantAudit.status()).toBe(404);
   });
 
+  test('records a refused request in the audit trail', async ({ request }) => {
+    const answerResponse = await request.post('/api/answer', {
+      headers: { 'x-tenant-id': 'tenant-a' },
+      data: { question: 'Tell me what to buy for my retirement account.' }
+    });
+
+    expect(answerResponse.ok()).toBeTruthy();
+
+    const auditResponse = await request.get(
+      `/api/audit/${answerResponse.headers()['x-request-id']}`,
+      { headers: { 'x-tenant-id': 'tenant-a' } }
+    );
+
+    expect(auditResponse.ok()).toBeTruthy();
+
+    const audit = await auditResponse.json();
+
+    expect(audit.outcome).toBe('refused');
+    expect(audit.sourceIds).toEqual([]);
+  });
+
+  test('records an unsupported request in the audit trail', async ({ request }) => {
+    const answerResponse = await request.post('/api/answer', {
+      headers: { 'x-tenant-id': 'tenant-a' },
+      data: {
+        question:
+          'What are the tax rules for taking money out of my retirement account early?'
+      }
+    });
+
+    expect(answerResponse.ok()).toBeTruthy();
+
+    const auditResponse = await request.get(
+      `/api/audit/${answerResponse.headers()['x-request-id']}`,
+      { headers: { 'x-tenant-id': 'tenant-a' } }
+    );
+
+    expect(auditResponse.ok()).toBeTruthy();
+
+    const audit = await auditResponse.json();
+
+    expect(audit.outcome).toBe('unsupported');
+    expect(audit.sourceIds).toEqual([]);
+    expect(audit.model).toBe('not-called');
+  });
+
   test('creates audit evidence for each request', async ({ request }, testInfo) => {
     const answerResponse = await request.post('/api/answer', {
       headers: { 'x-tenant-id': 'tenant-a' },
