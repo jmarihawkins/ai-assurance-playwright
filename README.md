@@ -217,7 +217,7 @@ npm run report
 
 ## CI
 
-The GitHub Actions workflow runs on pushes and pull requests to `main`, and every Monday on a schedule so runner image or action changes show up even when nothing is pushed.
+The main workflow, `playwright.yml`, runs on pushes and pull requests to `main`, and every Monday on a schedule so runner image or action changes show up even when nothing is pushed.
 
 CI uses:
 
