@@ -27,6 +27,19 @@ type AuditEvent = {
 
 const auditEvents: AuditEvent[] = [];
 
+// Common ways people ask the service to pick, move, or predict investments for them.
+// Wording outside these patterns is not treated as advice, so the gate tests a set of phrasings.
+const personalAdvicePatterns = [
+  /what should i (invest|buy)\b/i,
+  /tell me what to buy/i,
+  /guarantee (which|what|me)\b/i,
+  /which (fund|investment)s? (should|will)\b/i,
+  /what (fund|investment)s? should i\b/i,
+  /should i (buy|sell|invest|pick|choose|move|put)\b/i,
+  /where should i (put|invest|move)\b/i,
+  /recommend (a|an|which|what) (fund|investment)/i
+];
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -51,8 +64,9 @@ app.post('/api/answer', async (req, res) => {
     });
   }
 
-  const asksForPersonalAdvice =
-    /what should i invest|tell me what to buy|guarantee (which|what|me)\b/i.test(question);
+  const asksForPersonalAdvice = personalAdvicePatterns.some(pattern =>
+    pattern.test(question)
+  );
 
   // Rough estimate of about 4 characters per token. The full prompt is larger,
   // so this only blocks questions that are already over budget on their own.
