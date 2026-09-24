@@ -61,6 +61,16 @@ test.describe('response quality', () => {
     );
   });
 
+  test('asks for a question when the box is empty', async ({ page }) => {
+    await page.goto('/');
+
+    await page.locator('#question').fill('');
+    await page.getByRole('button', { name: 'Ask' }).click();
+
+    await expect(page.locator('#error')).toHaveText('Please enter a question.');
+    await expect(page.locator('#answer')).toBeEmpty();
+  });
+
   test('tells the user when a question is too long to check', async ({ page }) => {
     await page.goto('/');
 

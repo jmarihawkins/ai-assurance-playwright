@@ -165,6 +165,12 @@
           })
         });
 
+        // The server rejects an empty question with a 400, which is not an outage.
+        if (response.status === 400) {
+          error.textContent = 'Please enter a question.';
+          return;
+        }
+
         if (!response.ok) {
           throw new Error('The answer service is unavailable.');
         }
