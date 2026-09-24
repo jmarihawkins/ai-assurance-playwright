@@ -8,21 +8,21 @@ The application is intentionally small. The focus is on how browser and API test
 
 ## What is checked
 
-| Control | What the test verifies |
-| --- | --- |
-| Grounded response | A supported informational answer returns the expected source |
-| Answer grounding | In live mode, an LLM judge checks that answers make no claims beyond the approved source |
-| Refusal behavior | Requests to choose an investment or to guarantee which fund will earn the most are refused, and in live mode an LLM judge grades each refusal |
-| Unsupported questions | Informational questions with no approved source get an unsupported answer and the model is not called |
-| Model and prompt control | The expected model and prompt versions are visible and checked |
-| Token budget | Questions already over the input budget are rejected before the model call, and a test checks that token use for a supported question stays within defined limits |
-| Retrieval rule | Supported informational questions use the expected knowledge source |
-| Training rule | Responses and audit records carry the policy's `trainingAllowed` value |
-| Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant |
-| Audit evidence | Each answered, refused, unsupported, rejected, or failed request has a request ID and matching audit record |
-| Release gate | Every scenario in a fixed behavior set must pass |
-| Judge calibration | The judge must agree with a set of hand-labeled pass, fail, and borderline answers |
-| Graceful failure | The page shows a clear fallback when the answer service fails |
+| Control | What the test verifies | Test file |
+| --- | --- | --- |
+| Grounded response | A supported informational answer returns the expected source | `quality.spec.ts`, `assurance-gate.spec.ts` |
+| Answer grounding | In live mode, an LLM judge checks that answers make no claims beyond the approved source | `assurance-gate.spec.ts` |
+| Refusal behavior | Requests to choose an investment or to guarantee which fund will earn the most are refused, and in live mode an LLM judge grades each refusal | `quality.spec.ts`, `assurance-gate.spec.ts` |
+| Unsupported questions | Informational questions with no approved source get an unsupported answer and the model is not called | `quality.spec.ts`, `controls.spec.ts`, `assurance-gate.spec.ts` |
+| Model and prompt control | The expected model and prompt versions are visible and checked | `controls.spec.ts` |
+| Token budget | Questions already over the input budget are rejected before the model call, and a test checks that token use for a supported question stays within defined limits | `controls.spec.ts`, `quality.spec.ts` |
+| Retrieval rule | Supported informational questions use the expected knowledge source | `controls.spec.ts` |
+| Training rule | Responses and audit records carry the policy's `trainingAllowed` value | `controls.spec.ts` |
+| Tenant evidence | Audit records stay tied to the tenant that created the request and are not returned to another tenant | `controls.spec.ts` |
+| Audit evidence | Each answered, refused, unsupported, rejected, or failed request has a request ID and matching audit record | `controls.spec.ts`, `resilience.spec.ts` |
+| Release gate | Every scenario in a fixed behavior set must pass | `assurance-gate.spec.ts` |
+| Judge calibration | The judge must agree with a set of hand-labeled pass, fail, and borderline answers | `evaluator.spec.ts` |
+| Graceful failure | The page shows a clear fallback when the answer service fails | `resilience.spec.ts` |
 
 ## Project layout
 
@@ -94,6 +94,8 @@ This is a keyword lookup, not a vector search or RAG platform. It gives the test
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
 
+The server spots advice requests with a short list of patterns for common phrasings, such as asking which fund to pick, where to put money, or which fund will earn the most. Wording outside those patterns is not treated as advice, so the gate checks a set of advice phrasings plus an informational question that must not be caught.
+
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
 ## How the service works
@@ -164,6 +166,10 @@ The current scenarios cover:
 - an informational question with no approved source, which should return the unsupported message without a model call
 - a question asking what to invest in
 - a question about a detail the source does not cover, which should be answered without inventing that detail
+- four more advice phrasings: which fund to pick, moving money into a named fund, where to put retirement money, and which fund will earn the most
+- an informational question that starts with should, which must be answered rather than refused
+
+Refusal scenarios must also be routed to a `refused` outcome, so an advice request that slips past the patterns fails the gate even if the answer happens to avoid advice.
 
 In mock mode the gate uses fixed checks, since mock answers are fixed text. In live mode an LLM judge grades each refusal and checks each answered scenario against its source, and the judge's reasons are attached to the report. All current scenarios must pass.
 
@@ -176,7 +182,7 @@ In mock mode the gate uses fixed checks, since mock answers are fixed text. In l
 
 The judge returns a one sentence reason and a pass or fail verdict as structured JSON. A cut-off or unreadable grade fails the test instead of counting as a pass.
 
-`tests/judge-cases.ts` holds 13 answers labeled by hand, including clear passes, clear fails, and borderline cases such as a recommendation behind a disclaimer or a plausible but invented time frame. `tests/evaluator.spec.ts` runs each case as its own test and grades it three times, and all three verdicts must match the label. That checks the judge is consistent, not just right once. Each verdict, its reason, and the judge prompt version are attached to the report for review.
+`tests/judge-cases.ts` holds 18 answers labeled by hand, 9 pass and 9 fail, including 10 borderline cases such as a recommendation behind a disclaimer, a hedged but invented claim, or a plausible but invented time frame. `tests/evaluator.spec.ts` runs each case as its own test and grades it three times, and all three verdicts must match the label. That checks the judge is consistent, not just right once. Each verdict, its reason, and the judge prompt version are attached to the report for review.
 
 The judge uses the same model as the service because the policy pins one model ID. A separate model would give a more independent grade. The labeled set is small and only covers this project's two rubrics.
 
