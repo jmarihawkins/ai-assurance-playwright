@@ -26,6 +26,32 @@ test('returns a 503 when the model call fails on the server', async ({ request }
   expect(body.requestId).toBeTruthy();
 });
 
+test('records a failed model call in the audit trail', async ({ request }) => {
+  const response = await request.post('http://127.0.0.1:4174/api/answer', {
+    headers: { 'x-tenant-id': 'tenant-a' },
+    data: { question: 'How does a target-date fund work?' }
+  });
+
+  expect(response.status()).toBe(503);
+
+  const { requestId } = await response.json();
+
+  const auditResponse = await request.get(
+    `http://127.0.0.1:4174/api/audit/${requestId}`,
+    { headers: { 'x-tenant-id': 'tenant-a' } }
+  );
+
+  expect(auditResponse.ok()).toBeTruthy();
+
+  const audit = await auditResponse.json();
+
+  expect(audit.outcome).toBe('failed');
+  expect(audit.tenantId).toBe('tenant-a');
+  expect(audit.sourceIds).toEqual(['plan-guide-12']);
+  expect(audit.inputTokens).toBeNull();
+  expect(audit.outputTokens).toBeNull();
+});
+
 test('treats a cut-off model reply as a failure', () => {
   expect(() =>
     getUsableText({

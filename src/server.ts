@@ -16,12 +16,12 @@ type AuditEvent = {
   tenantId: string;
   model: string;
   promptVersion: string;
-  inputTokens: number;
-  outputTokens: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
   retrievalUsed: boolean;
   sourceIds: string[];
   trainingAllowed: boolean;
-  outcome: 'answered' | 'refused' | 'unsupported' | 'rejected';
+  outcome: 'answered' | 'refused' | 'unsupported' | 'rejected' | 'failed';
   mode: 'live' | 'mock';
 };
 
@@ -183,6 +183,22 @@ ${question}
     });
   } catch (error) {
     console.error('AI request failed:', error);
+
+    // Failed calls still get an audit record. Token usage is not available
+    // when the call fails, so it is recorded as null rather than zero.
+    auditEvents.push({
+      requestId,
+      tenantId,
+      model: assurancePolicy.model,
+      promptVersion: assurancePolicy.promptVersion,
+      inputTokens: null,
+      outputTokens: null,
+      retrievalUsed,
+      sourceIds,
+      trainingAllowed: assurancePolicy.trainingAllowed,
+      outcome: 'failed',
+      mode
+    });
 
     res.status(503).json({
       error: 'AI service is temporarily unavailable',
