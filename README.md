@@ -167,6 +167,8 @@ The gate checks the actual response behavior and expected source use. All curren
 
 This verifies the application's fallback behavior without requiring a real OpenAI outage.
 
+Playwright also starts a second server on port 4174 in live mode, with its OpenAI base URL pointed at local port 9 and a placeholder key. Node's `fetch` refuses to connect to that port, so no request leaves the machine. Every model call on that server fails, and a test checks that the server returns a `503` with its error body.
+
 The same file checks the reply handling in `src/openai.ts` directly. A cut-off or empty model reply is treated as a failure and a complete reply is passed through. These checks use fake reply objects instead of the API, so they also run in CI.
 
 ## Run locally

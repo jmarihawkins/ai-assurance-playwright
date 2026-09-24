@@ -8,7 +8,7 @@ import { getOpenAIResponse } from './openai.js';
 import { findKnowledge } from './knowledge.js';
 
 const app = express();
-const port = 4173;
+const port = Number(process.env.PORT) || 4173;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type AuditEvent = {
