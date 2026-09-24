@@ -204,7 +204,7 @@ test.describe('release controls', () => {
     expect(audit.model).toBe('not-called');
   });
 
-  test('creates audit evidence for each request', async ({ request }, testInfo) => {
+  test('records an answered request in the audit trail', async ({ request }, testInfo) => {
     const answerResponse = await request.post('/api/answer', {
       headers: { 'x-tenant-id': 'tenant-a' },
       data: { question: 'How does a target-date fund work?' }
