@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Playwright checks for AI response quality, release controls, token budgets, audit evidence, and graceful failure handling.",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "tsx src/server.ts",
     "test": "playwright test",

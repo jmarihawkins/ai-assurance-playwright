@@ -47,8 +47,6 @@ The application is intentionally small. The focus is on how browser and API test
 ├── package.json
 ├── package-lock.json
 ├── playwright.config.ts
-├── requirements.sh
-├── requirements.txt
 └── tsconfig.json
 ```
 
@@ -89,12 +87,6 @@ This is a keyword lookup, not a vector search or RAG platform. It gives the test
 
 Personal investment requests do not use the informational source. They are handled as refusal scenarios.
 
-The audit `outcome` records how the server routed the request, not a judgment of the model's reply. The refusal wording itself is checked by the Playwright tests against the actual response text.
-
-Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question. The full prompt is not checked before the call. In live mode, the token budget test compares the API-reported usage for the target-date question against the policy.
-
-If the model call fails, the server returns a `503` with the request ID and records a `failed` outcome. Token counts on that record are `null` because usage is not available from a failed call.
-
 When `requireRetrieval` is on in `src/policy.ts` and an informational question has no approved source, the server does not call the model. It returns an `unsupported` outcome with a fixed message, records the request with zero tokens, and the page shows that no supporting source was found.
 
 ## How the service works
@@ -110,6 +102,12 @@ A successful request produces:
 - model and prompt version information
 - a unique request ID
 - an audit event tied to the tenant that made the request
+
+Before any lookup, the server estimates the question's size at about four characters per token. If the question alone is over `maxInputTokens`, it is rejected without retrieval or a model call and recorded with a `rejected` outcome. The estimate only covers the question. The full prompt is not checked before the call. In live mode, the token budget test compares the API-reported usage for the target-date question against the policy.
+
+If the model call fails, the server returns a `503` with the request ID and records a `failed` outcome. Token counts on that record are `null` because usage is not available from a failed call.
+
+The audit `outcome` records how the server routed the request, not a judgment of the model's reply. The refusal wording itself is checked by the Playwright tests against the actual response text.
 
 `src/policy.ts` keeps the expected model, prompt version, token limits, retrieval rule, and training rule in one place.
 
@@ -172,17 +170,11 @@ The same file checks the reply handling in `src/openai.ts` directly. A cut-off o
 
 Requirements:
 
-- Node.js 22 or newer
+- Node.js 22 or newer, as declared under `engines` in `package.json`
 - npm
 - an OpenAI API key for live mode
 
-Install the project dependencies from Git Bash or WSL:
-
-```bash
-./requirements.sh
-```
-
-Or run the same commands directly, including from PowerShell:
+Install the locked dependencies and the Chromium browser Playwright uses:
 
 ```bash
 npm ci
