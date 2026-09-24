@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { assurancePolicy } from '../src/policy.js';
 
 test.describe('response quality', () => {
   test('shows an educational answer with its source', async ({ page }) => {
@@ -58,5 +59,28 @@ test.describe('response quality', () => {
     await expect(page.locator('#source')).toHaveText(
       'Source: no supporting source found'
     );
+  });
+
+  test('tells the user when a question is too long to check', async ({ page }) => {
+    await page.goto('/');
+
+    await page
+      .locator('#question')
+      .fill(
+        'How does a target-date fund work? ' +
+          'x'.repeat(assurancePolicy.maxInputTokens * 4)
+      );
+
+    await page.getByRole('button', { name: 'Ask' }).click();
+
+    await expect(page.locator('#answer')).toHaveText(
+      'That question is too long to process. Please shorten it and try again.'
+    );
+
+    await expect(page.locator('#source')).toHaveText(
+      'Source: not checked because the question was too long'
+    );
+
+    await expect(page.locator('#error')).toBeEmpty();
   });
 });
