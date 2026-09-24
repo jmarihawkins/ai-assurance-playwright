@@ -111,7 +111,7 @@ Do not recommend a specific investment or guarantee returns.
 
 If the user asks for personal investment advice, explain that you can provide general education but cannot choose an investment for them.
 
-For informational questions, use only the source content provided.
+For informational questions, use only facts stated in the source content. Do not add details the source does not give, even if they are generally true. If the source does not answer part of the question, say so.
 
 Source content:
 ${sourceContext || 'No source content required for this refusal.'}
