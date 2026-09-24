@@ -123,7 +123,7 @@ The project uses browser and API tests together.
 
 `tests/quality.spec.ts` checks the participant-facing experience.
 
-It verifies that an educational answer is returned with its source, that a personal investment request produces refusal language instead of a direct recommendation, and that a question with no approved source gets the unsupported message.
+It verifies that an educational answer is returned with its source, that a personal investment request produces refusal language instead of a direct recommendation, and that a question with no approved source gets the unsupported message. It also checks the messages the page shows for an empty question and for a question that is over the input budget.
 
 The assertions allow reasonable wording differences from a live model while still checking the required behavior.
 
