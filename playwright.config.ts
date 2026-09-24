@@ -1,4 +1,8 @@
 import { defineConfig } from '@playwright/test';
+import dotenv from 'dotenv';
+
+// Lets the test process read AI_MODE and the key from .env, which the judge tests need.
+dotenv.config({ quiet: true });
 
 export default defineConfig({
   testDir: './tests',
