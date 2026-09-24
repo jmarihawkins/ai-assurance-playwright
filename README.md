@@ -239,6 +239,8 @@ Playwright is used here for AI-facing quality and release controls, not only bro
 
 The project includes a real OpenAI API path, but it is not meant to be a complete production AI platform.
 
+Audit records are kept in server memory for the life of the process. They are not persisted, so the Playwright report is where run evidence is kept.
+
 Tenant IDs come from the `x-tenant-id` request header and are not authenticated. The tenant checks cover how evidence is recorded and returned per tenant, not tenant isolation.
 
 A larger system could replace the knowledge lookup with a retrieval service or vector store while keeping similar assurance checks around the service boundary.
