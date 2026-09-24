@@ -68,7 +68,7 @@ test.describe('release controls', () => {
     expect((await auditResponse.json()).model).toBe('not-called');
   });
 
-  test('requires retrieval for an informational answer and blocks training', async ({ request }) => {
+  test('requires retrieval for an informational answer', async ({ request }) => {
     const response = await request.post('/api/answer', {
       headers: { 'x-tenant-id': 'tenant-b' },
       data: { question: 'How does a target-date fund work?' }
@@ -81,6 +81,17 @@ test.describe('release controls', () => {
     expect(body.controls.retrievalUsed).toBe(
       assurancePolicy.requireRetrieval
     );
+  });
+
+  test('reports the no-training policy on each answer', async ({ request }) => {
+    const response = await request.post('/api/answer', {
+      headers: { 'x-tenant-id': 'tenant-b' },
+      data: { question: 'How does a target-date fund work?' }
+    });
+
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
 
     expect(body.controls.trainingAllowed).toBe(
       assurancePolicy.trainingAllowed
